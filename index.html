@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>法治星途 · 联网排行榜</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+      color: #1e293b;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    header {
+      background: #3b82f6;
+      color: white;
+      text-align: center;
+      padding: 24px 20px;
+    }
+    header h1 { font-size: 28px; margin-bottom: 8px; }
+    .account-info {
+      background: rgba(255,255,255,0.2);
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+    .panel { display: none; padding: 24px; }
+    .active { display: block; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.9; }
+    .secondary { background: #64748b; }
+    .stats-row {
+      display: flex;
+      justify-content: space-around;
+      margin: 16px 0;
+      flex-wrap: wrap;
+    }
+    .stat-box {
+      text-align: center;
+      padding: 10px;
+      background: #dbeafe;
+      border-radius: 8px;
+      min-width: 100px;
+    }
+    ol.leaderboard {
+      padding-left: 20px;
+      margin-top: 20px;
+    }
+    ol.leaderboard li {
+      margin-bottom: 12px;
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 4px solid #3b82f6;
+    }
+    #status {
+      min-height: 1.5em;
+      margin: 10px 0;
+      color: #ef4444;
+      font-weight: bold;
+    }
+    footer {
+      text-align: center;
+      padding: 16px;
+      color: #64748b;
+      font-size: 14px;
+      background: #f8fafc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>法治星途 · 卡牌挑战</h1>
+      <p>翻开知识之牌，点亮成长之路</p>
+      <div class="account-info">
+        👤 我的账户 ID：<span id="accountIdDisplay">加载中...</span>
+      </div>
+    </header>
+
+    <!-- 主页 -->
+    <div id="homePanel" class="panel active">
+      <div class="stats-row">
+        <div class="stat-box">累计答题：<span id="totalAnswered">0</span> 道</div>
+        <div class="stat-box">累计正确率：<span id="totalAccuracy">0</span>%</div>
+        <div class="stat-box">历史错题：<span id="totalWrong">0</span> 道</div>
+      </div>
+
+      <h2>🎮 开始挑战</h2>
+      <button onclick="simulateChallenge()">开始答题（模拟）</button>
+      
+      <br><br>
+      <button class="secondary" onclick="showLeaderboard()">🏅 查看全球排行榜</button>
+    </div>
+
+    <!-- 结果页 -->
+    <div id="resultPanel" class="panel">
+      <h2>🎉 挑战完成！</h2>
+      <p>⏱️ 总耗时：<span id="finalTime">01:20</span></p>
+      <p>答对 <span id="correctNum">4</span> / 5 题</p>
+      <p>本次正确率：<span id="accuracy">80</span>%</p>
+      <br>
+      <div id="status"></div>
+      <br>
+      <button onclick="submitScore()">📤 提交成绩到全球榜</button>
+      <button class="secondary" onclick="backToHome()">🏠 返回主页</button>
+    </div>
+
+    <!-- 排行榜 -->
+    <div id="leaderboardPanel" class="panel">
+      <h2>🏆 全球排行榜（Top 50）</h2>
+      <p id="loading">加载中...（首次提交后需等待1分钟）</p>
+      <ol class="leaderboard" id="leaderboardList"></ol>
+      <button class="secondary" onclick="backToHome()">🏠 返回主页</button>
+    </div>
+
+    <footer>
+      © 2025 法治星途 · 数据由 GitHub 自动同步
+    </footer>
+  </div>
+
+  <script>
+    // ==============================
+    // 🔧 配置你的 GitHub 信息（必须修改！）
+    // ==============================
+    const GITHUB_OWNER = 'jerry35in';   // ←←← 改成你的 GitHub 用户名！
+    const GITHUB_REPO = 'lidayu-bi';         // ←←← 改成你的仓库名！
+
+    // 自动生成或读取 accountId
+    let accountId = localStorage.getItem('accountId') || generateUUID();
+    localStorage.setItem('accountId', accountId);
+
+    // 初始化本地统计数据
+    let totalAnswered = parseInt(localStorage.getItem('totalAnswered')) || 0;
+    let totalCorrect = parseInt(localStorage.getItem('totalCorrect')) || 0;
+    let totalWrong = parseInt(localStorage.getItem('totalWrong')) || 0;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('accountIdDisplay').textContent = accountId;
+      updateStatsUI();
+    });
+
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function updateStatsUI() {
+      document.getElementById('totalAnswered').textContent = totalAnswered;
+      document.getElementById('totalAccuracy').textContent = totalAnswered > 0 ? Math.round(totalCorrect / totalAnswered * 100) : 0;
+      document.getElementById('totalWrong').textContent = totalWrong;
+    }
+
+    let mockAccuracy, mockTime;
+
+    function simulateChallenge() {
+      mockAccuracy = Math.floor(Math.random() * 21) + 80; // 80~100%
+      const totalSec = 40 + Math.floor(Math.random() * 50); // 40~90秒
+      mockTime = `${String(Math.floor(totalSec / 60)).padStart(2, '0')}:${String(totalSec % 60).padStart(2, '0')}`;
+      
+      const correct = Math.round(mockAccuracy * 5 / 100);
+      totalAnswered += 5;
+      totalCorrect += correct;
+      totalWrong += (5 - correct);
+
+      localStorage.setItem('totalAnswered', totalAnswered);
+      localStorage.setItem('totalCorrect', totalCorrect);
+      localStorage.setItem('totalWrong', totalWrong);
+
+      document.getElementById('accuracy').textContent = mockAccuracy;
+      document.getElementById('finalTime').textContent = mockTime;
+      document.getElementById('correctNum').textContent = correct;
+      
+      updateStatsUI();
+      showPanel('resultPanel');
+
+      // 保存本次成绩用于提交
+      window.currentScore = { accuracy: mockAccuracy, time: mockTime };
+    }
+
+    async function submitScore() {
+      if (!window.currentScore) {
+        document.getElementById('status').textContent = '❌ 无成绩可提交';
+        return;
+      }
+
+      const { accuracy, time } = window.currentScore;
+
+      const title = `[Score] ${accountId} - ${accuracy}%`;
+      const body = `\`\`\`json
+{
+  "accountId": "${accountId}",
+  "accuracy": ${accuracy},
+  "time": "${time}"
+}
+\`\`\``;
+
+      document.getElementById('status').textContent = '⏳ 正在提交...';
+
+      try {
+        const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/issues`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            body: body,
+            labels: ['score']
+          })
+        });
+
+        if (response.ok) {
+          document.getElementById('status').innerHTML = '✅ 提交成功！<br>排行榜将在1分钟内更新...';
+        } else {
+          document.getElementById('status').textContent = '❌ 提交失败（请确保仓库 Issues 已开启）';
+        }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').textContent = '❌ 网络错误，请重试';
+      }
+    }
+
+    async function showLeaderboard() {
+      showPanel('leaderboardPanel');
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('leaderboardList').innerHTML = '';
+
+      try {
+        const url = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/leaderboard.json?t=${Date.now()}`;
+        const response = await fetch(url);
+        const scores = await response.json();
+
+        const listEl = document.getElementById('leaderboardList');
+        if (!Array.isArray(scores) || scores.length === 0) {
+          listEl.innerHTML = '<li>暂无成绩记录</li>';
+        } else {
+          scores.slice(0, 50).forEach((score, index) => {
+            const displayId = score.accountId?.substring(0, 12) + '...';
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>${index + 1}. ${displayId}</strong> — ${score.accuracy}% | ${score.time}`;
+            listEl.appendChild(li);
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('leaderboardList').innerHTML = '<li>加载失败，请稍后重试</li>';
+      }
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    function showPanel(panelId) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(panelId).classList.add('active');
+    }
+
+    function backToHome() {
+      showPanel('homePanel');
+    }
+  </script>
+</body>
+</html>
